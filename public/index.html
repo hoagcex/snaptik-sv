@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapTik Telegram Bot - Dashboard & Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="logo-group">
+        <div class="logo-badge">⚡</div>
+        <div class="logo-text">
+          <h1>SnapTik Downloader</h1>
+          <p>Telegram Bot Server & Control Dashboard</p>
+        </div>
+      </div>
+      <div id="statusPill" class="status-pill">
+        <span id="pulseDot" class="pulse-dot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </header>
+
+    <!-- Metrics Row -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Total Requests</div>
+        <div id="statTotal" class="metric-value cyan">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Downloaded & Sent</div>
+        <div id="statSuccess" class="metric-value green">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Rejected (> 2 Mins)</div>
+        <div id="statRejectDuration" class="metric-value amber">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Rejected (> 50 MB)</div>
+        <div id="statRejectSize" class="metric-value pink">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Rejected (Non-Video)</div>
+        <div id="statRejectNonVideo" class="metric-value red">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Data Transferred</div>
+        <div id="statTransferred" class="metric-value">0 B</div>
+      </div>
+    </div>
+
+    <!-- Main Grid: Rules & Interactive URL Tester -->
+    <div class="grid-2">
+      <!-- Active Policies & Constraints -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🛡️</span> Bot Constraints & Storage Rules
+          </div>
+        </div>
+        <ul class="rule-list">
+          <li class="rule-item">
+            <span class="rule-badge badge-enforced">&lt; 2 MINS</span>
+            <div>
+              <strong>Max Video Duration:</strong> Videos longer than 2 minutes (120 seconds) are automatically rejected to preserve bandwidth.
+            </div>
+          </li>
+          <li class="rule-item">
+            <span class="rule-badge badge-enforced">50 MB</span>
+            <div>
+              <strong>Max File Size Limit:</strong> Video downloads are aborted and rejected if they exceed 50 MB (Telegram Bot API limit).
+            </div>
+          </li>
+          <li class="rule-item">
+            <span class="rule-badge badge-auto">VIDEOS & PHOTOS</span>
+            <div>
+              <strong>Videos & Photo Slideshows:</strong> Downloads watermark-free videos (&lt; 2 mins) and all images in photo slideshows. Shop products and live streams are rejected.
+            </div>
+          </li>
+          <li class="rule-item">
+            <span class="rule-badge badge-auto">EPHEMERAL</span>
+            <div>
+              <strong>Auto-Cleanup Storage:</strong> Videos are temporarily written to the project's <code>./downloads</code> folder, dispatched to Telegram, and immediately deleted.
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Live Interactive URL Tester -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🔍</span> Interactive TikTok URL Tester
+          </div>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Test any TikTok link to verify how the bot validates video links, photo slideshows, and shop products:
+        </p>
+        <div class="tester-box">
+          <input
+            type="text"
+            id="testUrlInput"
+            class="input-url"
+            placeholder="https://www.tiktok.com/@user/video/... or https://vt.tiktok.com/..."
+            value="https://www.tiktok.com/@tobz2k19/video/7451777267107187986"
+          >
+          <button id="btnTest" class="btn-primary" onclick="testUrl()">
+            <span>Verify</span>
+          </button>
+        </div>
+
+        <div id="testResult" class="test-result"></div>
+      </div>
+    </div>
+
+    <!-- Secondary Grid: Activity Feed & Setup Instructions -->
+    <div class="grid-2">
+      <!-- Activity Feed -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📡</span> Live Activity Log
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-dim);" id="uptimeDisplay">Uptime: 0s</span>
+        </div>
+        <div id="activityFeed" class="activity-feed">
+          <div style="color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 1rem;">
+            No requests received yet. Send a link to your Telegram bot to see activity!
+          </div>
+        </div>
+      </div>
+
+      <!-- Telegram Bot Instructions -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🤖</span> Telegram Bot Usage
+          </div>
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.8rem;">
+          <p>
+            1. Open your Telegram bot configured with <code>TELEGRAM_BOT_TOKEN</code>.
+          </p>
+          <p>
+            2. Send <code>/start</code> to initialize the bot.
+          </p>
+          <p>
+            3. Paste any TikTok video URL. The bot will validate the link, download it locally to <code>./downloads</code>, send the MP4 back to you, and clean up the file immediately.
+          </p>
+          <p style="font-size: 0.8rem; color: var(--accent-cyan);">
+            💡 Try testing with photo posts or products to see the validation in action!
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>Built with Node.js &gt;= 24 & Express • SnapTik Telegram Bot</p>
+    </footer>
+  </div>
+
+  <script>
+    async function updateStats() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update status badge
+        const pulseDot = document.getElementById('pulseDot');
+        const statusText = document.getElementById('statusText');
+        if (data.bot.configured) {
+          pulseDot.className = 'pulse-dot';
+          statusText.textContent = `Bot Active (${data.bot.mode.toUpperCase()})`;
+        } else {
+          pulseDot.className = 'pulse-dot warning';
+          statusText.textContent = 'Token Missing in .env';
+        }
+
+        // Metrics
+        document.getElementById('statTotal').textContent = data.stats.totalRequests;
+        document.getElementById('statSuccess').textContent = data.stats.successfulDownloads;
+        document.getElementById('statRejectDuration').textContent = data.stats.rejectedDuration;
+        document.getElementById('statRejectSize').textContent = data.stats.rejectedSize;
+        document.getElementById('statRejectNonVideo').textContent = data.stats.rejectedNonVideo;
+        document.getElementById('statTransferred').textContent = data.stats.totalTransferredFormatted;
+        document.getElementById('uptimeDisplay').textContent = `Uptime: ${data.stats.uptimeSeconds}s`;
+
+        // Activity Feed
+        const feed = document.getElementById('activityFeed');
+        if (data.stats.recentActivity && data.stats.recentActivity.length > 0) {
+          feed.innerHTML = data.stats.recentActivity.map(act => {
+            let className = 'activity-item';
+            let icon = 'ℹ️';
+            if (act.type.includes('SUCCESS')) { className += ' download'; icon = '✅'; }
+            else if (act.type.includes('REJECT')) { className += ' reject'; icon = '⛔'; }
+            else if (act.type.includes('ERROR')) { className += ' error'; icon = '❌'; }
+
+            const time = new Date(act.timestamp).toLocaleTimeString();
+            let details = act.type;
+            if (act.info?.title) details = `${act.info.title} (${act.info.duration})`;
+            else if (act.info?.reason) details = act.info.reason;
+            else if (act.info?.error) details = act.info.error;
+
+            return `
+              <div class="${className}">
+                <span>${icon} <strong>${act.type}</strong> - ${details}</span>
+                <span style="color: var(--text-dim);">${time}</span>
+              </div>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.error('Stats poll error:', err);
+      }
+    }
+
+    async function testUrl() {
+      const input = document.getElementById('testUrlInput');
+      const btn = document.getElementById('btnTest');
+      const resultBox = document.getElementById('testResult');
+      const url = input.value.trim();
+
+      if (!url) return;
+
+      btn.disabled = true;
+      btn.innerHTML = '<span>Verifying...</span>';
+      resultBox.style.display = 'block';
+      resultBox.className = 'test-result';
+      resultBox.innerHTML = '<em>Analyzing link and verifying video streams...</em>';
+
+      try {
+        const res = await fetch('/api/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+
+        if (data.valid && data.data) {
+          resultBox.className = 'test-result success';
+          if (data.mediaType === 'photo') {
+            resultBox.innerHTML = `
+              <strong>✅ Valid TikTok Photo Slideshow!</strong><br>
+              <strong>Title:</strong> ${data.data.title || 'Untitled'}<br>
+              <strong>Creator:</strong> ${data.data.author.name} (@${data.data.author.username})<br>
+              <strong>Photos Found:</strong> <span style="color: var(--accent-green); font-weight: bold;">${data.data.imageCount} images</span><br>
+              <strong>Status:</strong> Ready to download all photos and dispatch as album!
+            `;
+          } else {
+            resultBox.innerHTML = `
+              <strong>✅ Valid TikTok Video!</strong><br>
+              <strong>Title:</strong> ${data.data.title || 'Untitled'}<br>
+              <strong>Creator:</strong> ${data.data.author.name} (@${data.data.author.username})<br>
+              <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.durationFormatted}</span> (Limit: &lt; 2m)<br>
+              <strong>Size:</strong> <span style="color: var(--accent-green);">${data.data.sizeFormatted}</span> (Limit: 50MB)<br>
+              <strong>Status:</strong> Ready for download & instant dispatch!
+            `;
+          }
+        } else {
+          resultBox.className = 'test-result error';
+          resultBox.innerHTML = `
+            <strong>❌ Link Rejected:</strong><br>
+            ${(data.error || 'The submitted link is not an allowed TikTok video.').replace(/\\n/g, '<br>')}
+          `;
+        }
+      } catch (err) {
+        resultBox.className = 'test-result error';
+        resultBox.innerHTML = `<strong>Error:</strong> ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Verify</span>';
+      }
+    }
+
+    // Poll stats every 3 seconds
+    setInterval(updateStats, 3000);
+    updateStats();
+  </script>
+</body>
+</html>
