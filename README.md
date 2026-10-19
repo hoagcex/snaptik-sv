@@ -1,6 +1,6 @@
-# SnapTik & Reels Telegram Downloader Bot 🤖
+# SnapTik & Media Telegram Downloader Bot 🤖
 
-A high-performance media downloader Telegram bot built with **Node.js > 24**, **GrammY**, and **Express** supporting **TikTok**, **Instagram Reels**, and **Facebook Reels**.
+A high-performance media downloader Telegram bot built with **Node.js > 24**, **GrammY**, and **Express** supporting **TikTok**, **Instagram Reels**, **Facebook Reels**, and **X (Twitter) Videos**.
 
 ---
 
@@ -10,8 +10,9 @@ A high-performance media downloader Telegram bot built with **Node.js > 24**, **
   * ✅ **TikTok Videos & Photos:** Watermark-free videos and complete photo slideshow carousels.
   * ✅ **Instagram Reels & Videos:** Fast public Instagram Reel and post video downloads.
   * ✅ **Facebook Reels & Videos:** Public Facebook Reels and videos via direct extraction and fallback engine.
-  * 🔒 **Private / Non-Public Reel Protection:** If a Reel is private, restricted, or cannot be seen, the bot displays a clear message stating it cannot download non-public media.
-  * ❌ Rejects **TikTok Shop products**, **Live streams**, **Stories**, profiles, and audio-only links.
+  * ✅ **X (Twitter) Videos:** High-speed downloads of public X / Twitter video posts and GIFs.
+  * 🔒 **Private / Restricted Media Protection:** If a post or Reel is private, protected, restricted, or cannot be seen, the bot displays a clear notification stating it cannot download non-public media.
+  * ❌ Rejects **TikTok Shop products**, **Live streams**, **Stories**, profiles, audio-only links, and text-only posts.
 * **Duration Limit Enforcement:** Strictly enforces **video duration < 2 minutes (120 seconds)**. Media exceeding this duration are automatically rejected.
 * **File Size Limit Enforcement:** Automatically rejects files exceeding **50 MB** (Telegram Bot API upload limit).
 * **Ephemeral Local Storage & Guaranteed Cleanup:**
@@ -19,7 +20,7 @@ A high-performance media downloader Telegram bot built with **Node.js > 24**, **
   2. Sends the video or photo album to the client via Telegram without return text or captions.
   3. **Immediately deletes the stored media from disk** in a guaranteed `finally` block.
   4. Automatically sweeps any orphan files on startup and every 20 minutes.
-* **Interactive Express Web Dashboard:** Runs an embedded Express web monitor at `http://localhost:3000` with live statistics, health checks (`/health`), and a built-in interactive URL validator tool supporting TikTok, Instagram, and Facebook links.
+* **Interactive Express Web Dashboard:** Runs an embedded Express web monitor at `http://localhost:3000` with live statistics, health checks (`/health`), and a built-in interactive URL validator tool supporting TikTok, Instagram, Facebook, and X (Twitter) links.
 
 ---
 

@@ -8,7 +8,9 @@ import { getTikTokVideo, formatBytes, formatDuration } from './tiktokService.js'
 import { downloadVideoToLocal, deleteLocalFile } from './fileManager.js';
 
 function makePrivateErrorMessage(platformName) {
-  return `🔒 **Cannot download this ${platformName} Reel.**\n\nThis Reel is not public, restricted, or cannot be seen. The bot can only download public Reels.`;
+  const isReel = platformName === 'Instagram' || platformName === 'Facebook';
+  const label = isReel ? 'Reel' : 'video';
+  return `🔒 **Cannot download this ${platformName} ${label}.**\n\nThis ${label} is not public, restricted, or cannot be seen. The bot can only download public media.`;
 }
 
 /**
@@ -38,7 +40,11 @@ function isPrivateOrRestrictedError(errorText) {
     text.includes('unable to fetch video information') ||
     text.includes('unsupported url') ||
     text.includes('could not find') ||
-    text.includes('blocked')
+    text.includes('blocked') ||
+    text.includes('protected account') ||
+    text.includes('this tweet is from') ||
+    text.includes('this post is unavailable') ||
+    text.includes('suspended')
   );
 }
 
@@ -270,7 +276,123 @@ export async function getFacebookReel(url) {
 }
 
 /**
- * Universal media fetcher routing to TikTok, Instagram, or Facebook
+ * Download and process an X (Twitter) video post
+ * @param {string} url
+ * @returns {Promise<any>}
+ */
+export async function getTwitterVideo(url) {
+  try {
+    // 1. Fetch metadata first to verify accessibility and duration
+    let info = null;
+    try {
+      info = await youtubedl(url, {
+        dumpSingleJson: true,
+        noWarnings: true,
+        noCallHome: true
+      });
+    } catch (metaErr) {
+      const errStr = (metaErr.stderr || metaErr.message || '');
+      if (errStr.includes('No video could be found')) {
+        return {
+          success: false,
+          isNoVideo: true,
+          error: '❌ **No video found in this X (Twitter) post!**\n\nPlease submit an X/Twitter link containing a video.'
+        };
+      }
+      if (isPrivateOrRestrictedError(errStr)) {
+        return {
+          success: false,
+          isPrivate: true,
+          error: makePrivateErrorMessage('X (Twitter)')
+        };
+      }
+      throw metaErr;
+    }
+
+    if (!info) {
+      return {
+        success: false,
+        isPrivate: true,
+        error: makePrivateErrorMessage('X (Twitter)')
+      };
+    }
+
+    // 2. Validate duration (< 2 mins / 120s)
+    const duration = info.duration || 0;
+    if (duration > 0 && duration > config.maxDurationSeconds) {
+      return {
+        success: false,
+        error: `⚠️ **Video duration exceeds limit!**\n\n` +
+               `⏱️ Video length: **${formatDuration(duration)}**\n` +
+               `⛔ Allowed limit: **< ${formatDuration(config.maxDurationSeconds)}** (2 minutes)\n\n` +
+               `Please submit a shorter video.`
+      };
+    }
+
+    // 3. Download directly to local downloads folder
+    const safeId = (info.id || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const localFilePath = path.join(config.downloadsDir, `x_${safeId}_${Date.now()}.mp4`);
+
+    await youtubedl(url, {
+      output: localFilePath,
+      format: 'best[ext=mp4]/best',
+      noPlaylist: true
+    });
+
+    if (!fs.existsSync(localFilePath)) {
+      throw new Error('Downloaded X (Twitter) video file was not created.');
+    }
+
+    const stat = await fs.promises.stat(localFilePath);
+    if (stat.size > config.maxFileSizeBytes) {
+      await deleteLocalFile(localFilePath);
+      return {
+        success: false,
+        error: `⚠️ **Video file size exceeds limit!**\n\n` +
+               `📦 Size: **${formatBytes(stat.size)}**\n` +
+               `⛔ Allowed limit: **${config.maxFileSizeMB} MB**`
+      };
+    }
+
+    return {
+      success: true,
+      platform: 'twitter',
+      mediaType: 'video',
+      data: {
+        id: safeId,
+        title: info.title || 'X (Twitter) Video',
+        filePath: localFilePath,
+        sizeBytes: stat.size,
+        duration: Math.round(duration)
+      }
+    };
+  } catch (err) {
+    const errStr = (err.stderr || err.message || '');
+    if (errStr.includes('No video could be found')) {
+      return {
+        success: false,
+        isNoVideo: true,
+        error: '❌ **No video found in this X (Twitter) post!**\n\nPlease submit an X/Twitter link containing a video.'
+      };
+    }
+    if (isPrivateOrRestrictedError(errStr)) {
+      return {
+        success: false,
+        isPrivate: true,
+        error: makePrivateErrorMessage('X (Twitter)')
+      };
+    }
+
+    return {
+      success: false,
+      isPrivate: true,
+      error: makePrivateErrorMessage('X (Twitter)')
+    };
+  }
+}
+
+/**
+ * Universal media fetcher routing to TikTok, Instagram, Facebook, or X (Twitter)
  * @param {string} url
  * @returns {Promise<any>}
  */
@@ -293,9 +415,13 @@ export async function fetchUniversalMedia(url) {
     return await getFacebookReel(url);
   }
 
+  if (platform === 'twitter') {
+    return await getTwitterVideo(url);
+  }
+
   return {
     success: false,
     platform: 'unknown',
-    error: '❌ Unsupported platform. Only TikTok, Instagram Reels, and Facebook Reels are supported.'
+    error: '❌ Unsupported platform. Only TikTok, Instagram Reels, Facebook Reels, and X (Twitter) videos are supported.'
   };
 }

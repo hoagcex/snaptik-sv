@@ -55,16 +55,17 @@ export function createBot() {
     const welcome = [
       `👋 *Hello ${ctx.from?.first_name || 'there'}!*`,
       '',
-      `Welcome to *SnapTik & Reels Downloader Bot* 📥`,
+      `Welcome to *SnapTik & Media Downloader Bot* 📥`,
       `Send me any link to a:`,
       `• 🎬 *TikTok Video* (no watermark) or *Photo Slideshow*`,
       `• 📸 *Instagram Reel* or Video`,
       `• 👥 *Facebook Reel* or Video`,
+      `• 🐦 *X (Twitter) Video*`,
       '',
       `⚡ *Download Rules & Limits:*`,
       `• ⏱️ *Max Duration:* Under 2 minutes (< 120s)`,
       `• 📦 *Max File Size:* ${config.maxFileSizeMB} MB`,
-      `• 🔒 *Public Media Only:* Private, friends-only, or restricted Reels cannot be downloaded.`,
+      `• 🔒 *Public Media Only:* Private, friends-only, or restricted posts cannot be downloaded.`,
       `• 🧹 *Auto-Cleanup:* Videos are saved to the server temporarily, sent to you, and deleted immediately!`,
       '',
       `Just paste a link below to try it out! 👇`
@@ -79,7 +80,7 @@ export function createBot() {
       `📖 *Downloader Bot Help & Usage*`,
       '',
       `*How to download:*`,
-      `1. Find a video or Reel on TikTok, Instagram, or Facebook.`,
+      `1. Find a video or Reel on TikTok, Instagram, Facebook, or X (Twitter).`,
       `2. Tap *Share* ➔ *Copy Link*.`,
       `3. Paste the link into this chat.`,
       '',
@@ -87,9 +88,10 @@ export function createBot() {
       `✅ *TikTok:* Videos without watermark & photo slideshows`,
       `✅ *Instagram:* Public Reels & video posts`,
       `✅ *Facebook:* Public Reels & videos`,
+      `✅ *X (Twitter):* Public video posts`,
       '',
       `*Unsupported Links (will be rejected):*`,
-      `❌ Non-public or restricted Reels (cannot be seen)`,
+      `❌ Non-public or restricted posts (cannot be seen)`,
       `❌ TikTok Shop products or Live streams`,
       `❌ Instagram or Facebook Stories`,
       `❌ Videos longer than 2 minutes (${config.maxDurationSeconds}s)`,
@@ -141,11 +143,12 @@ export function createBot() {
     if (urls.length === 0) {
       if (ctx.chat.type === 'private') {
         await ctx.reply(
-          `👋 Please send a valid *TikTok*, *Instagram Reel*, or *Facebook Reel* link.\n\n` +
+          `👋 Please send a valid *TikTok*, *Instagram Reel*, *Facebook Reel*, or *X (Twitter)* link.\n\n` +
           `_Examples:_\n` +
           `• TikTok: \`https://vt.tiktok.com/ZS4w1xnNH/\`\n` +
           `• Instagram: \`https://www.instagram.com/reel/C3bXYZ/\`\n` +
-          `• Facebook: \`https://www.facebook.com/reel/123456789/\``,
+          `• Facebook: \`https://www.facebook.com/reel/123456789/\`\n` +
+          `• X (Twitter): \`https://x.com/user/status/123456789\``,
           { parse_mode: 'Markdown' }
         );
       }
@@ -179,7 +182,7 @@ export function createBot() {
         await ctx.api.editMessageText(
           ctx.chat.id,
           statusMsg.message_id,
-          validation.error || '❌ Only TikTok, Instagram Reels, and Facebook Reels are supported.',
+          validation.error || '❌ Only TikTok, Instagram Reels, Facebook Reels, and X (Twitter) videos are supported.',
           { parse_mode: 'Markdown' }
         );
         return;

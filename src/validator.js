@@ -3,8 +3,8 @@
  * Supports TikTok, Instagram Reels, and Facebook Reels.
  */
 
-// Regex for finding TikTok, Instagram, and Facebook URLs within text
-export const MEDIA_URL_REGEX = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:tiktok\.com|instagram\.com|instagr\.am|facebook\.com|fb\.watch|fb\.com)\/[^\s<>"]+/gi;
+// Regex for finding TikTok, Instagram, Facebook, and X (Twitter) URLs within text
+export const MEDIA_URL_REGEX = /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:tiktok\.com|instagram\.com|instagr\.am|facebook\.com|fb\.watch|fb\.com|twitter\.com|x\.com|t\.co)\/[^\s<>"]+/gi;
 
 /**
  * Extracts all supported media URLs from a string (message text)
@@ -25,13 +25,14 @@ export const extractTikTokUrls = extractMediaUrls;
 /**
  * Detect the social media platform from URL
  * @param {string} url
- * @returns {'tiktok' | 'instagram' | 'facebook' | 'unknown'}
+ * @returns {'tiktok' | 'instagram' | 'facebook' | 'twitter' | 'unknown'}
  */
 export function detectPlatform(url) {
   const clean = (url || '').trim().toLowerCase();
   if (clean.includes('tiktok.com')) return 'tiktok';
   if (clean.includes('instagram.com') || clean.includes('instagr.am')) return 'instagram';
   if (clean.includes('facebook.com') || clean.includes('fb.watch') || clean.includes('fb.com')) return 'facebook';
+  if (clean.includes('twitter.com') || clean.includes('x.com') || clean.includes('t.co')) return 'twitter';
   return 'unknown';
 }
 
@@ -194,11 +195,63 @@ export function checkDirectUrlType(url) {
     };
   }
 
+  if (platform === 'twitter') {
+    // Root twitter/x link
+    if (/^https?:\/\/(?:www\.|mobile\.)?(?:twitter\.com|x\.com)\/?(?:\?.*)?$/i.test(cleanUrl)) {
+      return {
+        isValid: false,
+        platform,
+        reason: 'root',
+        message: '❌ **Please send a link to a specific X (Twitter) video post.**'
+      };
+    }
+
+    // Profile link without /status/
+    if (
+      /^https?:\/\/(?:www\.|mobile\.)?(?:twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/?(?:\?.*)?$/i.test(cleanUrl) &&
+      !/\/status\//i.test(cleanUrl)
+    ) {
+      return {
+        isValid: false,
+        platform,
+        reason: 'profile',
+        message: '❌ **X (Twitter) Profile link detected!**\n\nPlease send a link to a specific video post.'
+      };
+    }
+
+    // Shortlink (t.co)
+    if (/t\.co\/[a-zA-Z0-9]+/i.test(cleanUrl)) {
+      return {
+        isValid: true,
+        platform,
+        mediaType: 'shortlink',
+        reason: 'twitter_shortlink'
+      };
+    }
+
+    // Standard tweet / status post
+    if (/\/status\/\d+/i.test(cleanUrl)) {
+      return {
+        isValid: true,
+        platform,
+        mediaType: 'video',
+        reason: 'twitter_video'
+      };
+    }
+
+    return {
+      isValid: true,
+      platform,
+      mediaType: 'video',
+      reason: 'twitter_media'
+    };
+  }
+
   return {
     isValid: false,
     platform: 'unknown',
     reason: 'unsupported_platform',
-    message: '❌ **Unsupported URL!**\n\nOnly TikTok, Instagram Reels, and Facebook Reels are supported.'
+    message: '❌ **Unsupported URL!**\n\nOnly TikTok, Instagram Reels, Facebook Reels, and X (Twitter) videos are supported.'
   };
 }
 

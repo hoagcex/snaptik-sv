@@ -16,8 +16,8 @@
       <div class="logo-group">
         <div class="logo-badge">⚡</div>
         <div class="logo-text">
-          <h1>SnapTik &amp; Reels Downloader</h1>
-          <p>Telegram Bot Server &bull; TikTok, Instagram Reels &amp; Facebook Reels</p>
+          <h1>SnapTik &amp; Media Downloader</h1>
+          <p>Telegram Bot Server &bull; TikTok, Instagram Reels, Facebook &amp; X (Twitter)</p>
         </div>
       </div>
       <div id="statusPill" class="status-pill">
@@ -79,13 +79,13 @@
           <li class="rule-item">
             <span class="rule-badge badge-auto">MULTI-PLATFORM</span>
             <div>
-              <strong>TikTok, Instagram &amp; Facebook:</strong> Downloads TikTok videos &amp; photo slideshows, Instagram Reels &amp; posts, and Facebook Reels.
+              <strong>TikTok, Instagram, Facebook &amp; X:</strong> Downloads TikTok videos &amp; photos, Instagram Reels, Facebook Reels, and X (Twitter) videos.
             </div>
           </li>
           <li class="rule-item">
             <span class="rule-badge badge-enforced">PUBLIC ONLY</span>
             <div>
-              <strong>Private Reel Guard:</strong> If a Reel is private, restricted, or cannot be seen, the bot displays a clear message stating it cannot download non-public media.
+              <strong>Protected / Private Guard:</strong> If a post or Reel is private, protected, or cannot be seen, the bot displays a clear message stating it cannot download non-public media.
             </div>
           </li>
           <li class="rule-item">
@@ -105,14 +105,14 @@
           </div>
         </div>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Test any TikTok, Instagram Reel, or Facebook Reel link to verify validation and privacy detection:
+          Test any TikTok, Instagram Reel, Facebook Reel, or X (Twitter) link to verify validation and privacy detection:
         </p>
         <div class="tester-box">
           <input
             type="text"
             id="testUrlInput"
             class="input-url"
-            placeholder="TikTok, Instagram Reel, or Facebook Reel link..."
+            placeholder="TikTok, Instagram, Facebook, or X (Twitter) video link..."
             value="https://www.tiktok.com/@tobz2k19/video/7451777267107187986"
           >
           <button id="btnTest" class="btn-primary" onclick="testUrl()">
@@ -156,7 +156,7 @@
             2. Send <code>/start</code> to initialize the bot.
           </p>
           <p>
-            3. Paste any <strong>TikTok</strong>, <strong>Instagram Reel</strong>, or <strong>Facebook Reel</strong> URL.
+            3. Paste any <strong>TikTok</strong>, <strong>Instagram Reel</strong>, <strong>Facebook Reel</strong>, or <strong>X (Twitter) video</strong> URL.
           </p>
           <p>
             4. The bot downloads the media, sends it cleanly with no return text, and deletes the local file immediately. If private or restricted, it lets you know it cannot be downloaded.
@@ -270,6 +270,13 @@
             resultBox.innerHTML = `
               <strong>✅ Valid Public Facebook Reel!</strong><br>
               <strong>Title:</strong> ${data.data.title || 'Facebook Reel'}<br>
+              <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.duration || 0}s</span> (Limit: &lt; 2m)<br>
+              <strong>Status:</strong> Public and ready for instant dispatch!
+            `;
+          } else if (data.platform === 'twitter') {
+            resultBox.innerHTML = `
+              <strong>✅ Valid Public X (Twitter) Video!</strong><br>
+              <strong>Title:</strong> ${data.data.title || 'X (Twitter) Video'}<br>
               <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.duration || 0}s</span> (Limit: &lt; 2m)<br>
               <strong>Status:</strong> Public and ready for instant dispatch!
             `;
