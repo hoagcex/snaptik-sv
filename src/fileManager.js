@@ -13,21 +13,31 @@ import { formatBytes } from './tiktokService.js';
  * @param {string} videoId Unique TikTok ID for filename
  * @returns {Promise<{ filePath: string, sizeBytes: number }>}
  */
-export async function downloadVideoToLocal(videoUrl, videoId = 'video') {
+export async function downloadVideoToLocal(videoUrl, videoId = 'video', customHeaders = {}) {
   // Generate safe unique filename in local project downloads folder
   const safeId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, '_');
-  const fileName = `tiktok_${safeId}_${Date.now()}.mp4`;
+  const fileName = `media_${safeId}_${Date.now()}.mp4`;
   const filePath = path.join(config.downloadsDir, fileName);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000); // 60s download timeout
 
+  let defaultReferer = 'https://www.tiktok.com/';
+  if (videoUrl.includes('twimg.com') || videoUrl.includes('twitter.com') || videoUrl.includes('x.com')) {
+    defaultReferer = 'https://x.com/';
+  } else if (videoUrl.includes('fbcdn.net') || videoUrl.includes('facebook.com')) {
+    defaultReferer = 'https://www.facebook.com/';
+  } else if (videoUrl.includes('cdninstagram.com') || videoUrl.includes('instagram.com')) {
+    defaultReferer = 'https://www.instagram.com/';
+  }
+
   try {
     const response = await fetch(videoUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://www.tiktok.com/'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Referer': defaultReferer,
+        ...customHeaders
       }
     });
 

@@ -281,6 +281,96 @@ export async function getFacebookReel(url) {
  * @returns {Promise<any>}
  */
 export async function getTwitterVideo(url) {
+  const tweetIdMatch = url.match(/\/status\/(\d+)/i);
+  const tweetId = tweetIdMatch ? tweetIdMatch[1] : null;
+
+  // Method 1: Fast direct extraction via FixTweet / FxTwitter API (handles sensitive/NSFW tweets without login)
+  if (tweetId) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      const apiUrl = `https://api.fxtwitter.com/status/${tweetId}`;
+      const res = await fetch(apiUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+        }
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.code === 200 && data.tweet) {
+          const videos = data.tweet.media?.videos;
+          if (videos && Array.isArray(videos) && videos.length > 0) {
+            const video = videos[0];
+            const duration = video.duration || 0;
+
+            // Validate duration (< 2 mins / 120s)
+            if (duration > 0 && duration > config.maxDurationSeconds) {
+              return {
+                success: false,
+                error: `⚠️ **Video duration exceeds limit!**\n\n` +
+                       `⏱️ Video length: **${formatDuration(duration)}**\n` +
+                       `⛔ Allowed limit: **< ${formatDuration(config.maxDurationSeconds)}** (2 minutes)\n\n` +
+                       `Please submit a shorter video.`
+              };
+            }
+
+            // Pick highest bitrate MP4 variant
+            let streamUrl = video.url;
+            if (video.variants && Array.isArray(video.variants)) {
+              const mp4s = video.variants.filter(v => v.content_type === 'video/mp4' && v.url);
+              if (mp4s.length > 0) {
+                mp4s.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+                streamUrl = mp4s[0].url;
+              }
+            }
+
+            // Download directly to local storage
+            const dlResult = await downloadVideoToLocal(streamUrl, 'x_' + tweetId);
+
+            return {
+              success: true,
+              platform: 'twitter',
+              mediaType: 'video',
+              data: {
+                id: tweetId,
+                title: data.tweet.text || 'X (Twitter) Video',
+                filePath: dlResult.filePath,
+                sizeBytes: dlResult.sizeBytes,
+                duration: Math.round(duration)
+              }
+            };
+          } else {
+            // Post exists but has no videos (text, photos only)
+            return {
+              success: false,
+              isNoVideo: true,
+              error: '❌ **No video found in this X (Twitter) post!**\n\nPlease submit an X/Twitter link containing a video.'
+            };
+          }
+        } else if (data.code === 401 || data.code === 403 || data.message?.includes('PRIVATE') || data.message?.includes('PROTECTED')) {
+          return {
+            success: false,
+            isPrivate: true,
+            error: makePrivateErrorMessage('X (Twitter)')
+          };
+        } else if (data.code === 404) {
+          return {
+            success: false,
+            isPrivate: true,
+            error: makePrivateErrorMessage('X (Twitter)')
+          };
+        }
+      }
+    } catch (fxErr) {
+      // If primary method fails or times out, fall through to yt-dlp fallback
+    }
+  }
+
+  // Method 2: yt-dlp fallback
   try {
     // 1. Fetch metadata first to verify accessibility and duration
     let info = null;
@@ -330,7 +420,7 @@ export async function getTwitterVideo(url) {
     }
 
     // 3. Download directly to local downloads folder
-    const safeId = (info.id || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeId = (info.id || tweetId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
     const localFilePath = path.join(config.downloadsDir, `x_${safeId}_${Date.now()}.mp4`);
 
     await youtubedl(url, {
