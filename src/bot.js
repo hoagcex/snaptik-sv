@@ -1,7 +1,8 @@
 import { Bot, InputFile } from 'grammy';
 import { config } from './config.js';
-import { extractTikTokUrls, validateTikTokVideoUrl } from './validator.js';
-import { getTikTokVideo, formatBytes, formatDuration } from './tiktokService.js';
+import { extractMediaUrls, validateMediaUrl, detectPlatform } from './validator.js';
+import { formatBytes, formatDuration } from './tiktokService.js';
+import { fetchUniversalMedia } from './mediaService.js';
 import { downloadVideoToLocal, downloadPhotosToLocal, deleteLocalFile, deleteLocalFiles } from './fileManager.js';
 
 // Live statistics for Express dashboard
@@ -12,6 +13,7 @@ export const botStats = {
   rejectedDuration: 0,
   rejectedSize: 0,
   rejectedNonVideo: 0,
+  rejectedPrivate: 0,
   failedDownloads: 0,
   totalBytesTransferred: 0,
   recentActivity: []
@@ -53,16 +55,19 @@ export function createBot() {
     const welcome = [
       `👋 *Hello ${ctx.from?.first_name || 'there'}!*`,
       '',
-      `Welcome to *SnapTik Downloader Bot* 📥`,
-      `Send me any TikTok video link, and I will download and send it to you with no watermark!`,
+      `Welcome to *SnapTik & Reels Downloader Bot* 📥`,
+      `Send me any link to a:`,
+      `• 🎬 *TikTok Video* (no watermark) or *Photo Slideshow*`,
+      `• 📸 *Instagram Reel* or Video`,
+      `• 👥 *Facebook Reel* or Video`,
       '',
       `⚡ *Download Rules & Limits:*`,
       `• ⏱️ *Max Duration:* Under 2 minutes (< 120s)`,
       `• 📦 *Max File Size:* ${config.maxFileSizeMB} MB`,
-      `• 🎬 *Only TikTok Videos:* Photo posts, shop products, and live streams are NOT supported.`,
-      `• 🔒 *Auto-Cleanup:* Videos are saved to the server temporarily, sent to you, and deleted immediately!`,
+      `• 🔒 *Public Media Only:* Private, friends-only, or restricted Reels cannot be downloaded.`,
+      `• 🧹 *Auto-Cleanup:* Videos are saved to the server temporarily, sent to you, and deleted immediately!`,
       '',
-      `Just paste a TikTok link below to try it out! 👇`
+      `Just paste a link below to try it out! 👇`
     ].join('\n');
 
     await ctx.reply(welcome, { parse_mode: 'Markdown' });
@@ -71,21 +76,22 @@ export function createBot() {
   // Command: /help
   bot.command('help', async (ctx) => {
     const help = [
-      `📖 *SnapTik Bot Help & Usage*`,
+      `📖 *Downloader Bot Help & Usage*`,
       '',
       `*How to download:*`,
-      `1. Open TikTok and find a video you want to download.`,
+      `1. Find a video or Reel on TikTok, Instagram, or Facebook.`,
       `2. Tap *Share* ➔ *Copy Link*.`,
       `3. Paste the link into this chat.`,
       '',
-      `*Supported Links:*`,
-      `✅ Standard video links: \`https://www.tiktok.com/@user/video/...\``,
-      `✅ Short links: \`https://vt.tiktok.com/...\` or \`https://vm.tiktok.com/...\``,
+      `*Supported Platforms:*`,
+      `✅ *TikTok:* Videos without watermark & photo slideshows`,
+      `✅ *Instagram:* Public Reels & video posts`,
+      `✅ *Facebook:* Public Reels & videos`,
       '',
       `*Unsupported Links (will be rejected):*`,
-      `❌ TikTok photo carousels / slideshows (\`/photo/...\`)`,
-      `❌ TikTok Shop product links (\`shop.tiktok.com\` or \`/product/...\`)`,
-      `❌ TikTok Live streams`,
+      `❌ Non-public or restricted Reels (cannot be seen)`,
+      `❌ TikTok Shop products or Live streams`,
+      `❌ Instagram or Facebook Stories`,
       `❌ Videos longer than 2 minutes (${config.maxDurationSeconds}s)`,
       `❌ Videos larger than ${config.maxFileSizeMB} MB`,
       '',
@@ -106,7 +112,8 @@ export function createBot() {
       `• ⏱️ *Max Video Duration:* 2 minutes (120 seconds)`,
       `• 📦 *Max File Size:* ${config.maxFileSizeMB} MB`,
       `• 📁 *Storage Policy:* Ephemeral local storage (auto-deleted instantly after dispatch)`,
-      `• 🛡️ *Validation:* Pre-filtering for non-videos, photos, and products`
+      `• 🔒 *Privacy Policy:* Only public videos and Reels are downloadable`,
+      `• 🛡️ *Validation:* Pre-filtering for profiles, stories, products, and private media`
     ].join('\n');
 
     await ctx.reply(limits, { parse_mode: 'Markdown' });
@@ -128,13 +135,17 @@ export function createBot() {
   // Main message handler for links
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
-    const urls = extractTikTokUrls(text);
+    const urls = extractMediaUrls(text);
 
-    // If no TikTok URL detected
+    // If no supported URL detected
     if (urls.length === 0) {
       if (ctx.chat.type === 'private') {
         await ctx.reply(
-          `👋 Please send a valid *TikTok video link* to download.\n\n_Example:_ \`https://www.tiktok.com/@user/video/123456789\``,
+          `👋 Please send a valid *TikTok*, *Instagram Reel*, or *Facebook Reel* link.\n\n` +
+          `_Examples:_\n` +
+          `• TikTok: \`https://vt.tiktok.com/ZS4w1xnNH/\`\n` +
+          `• Instagram: \`https://www.instagram.com/reel/C3bXYZ/\`\n` +
+          `• Facebook: \`https://www.facebook.com/reel/123456789/\``,
           { parse_mode: 'Markdown' }
         );
       }
@@ -161,27 +172,30 @@ export function createBot() {
 
     try {
       // Step 1: Fast URL & Type Validation
-      const validation = validateTikTokVideoUrl(targetUrl);
+      const validation = validateMediaUrl(targetUrl);
       if (!validation.isValidMedia) {
         botStats.rejectedNonVideo++;
         logActivity('REJECT_NON_MEDIA', { url: targetUrl, reason: validation.error });
         await ctx.api.editMessageText(
           ctx.chat.id,
           statusMsg.message_id,
-          validation.error || '❌ Only TikTok video and photo links are supported.',
+          validation.error || '❌ Only TikTok, Instagram Reels, and Facebook Reels are supported.',
           { parse_mode: 'Markdown' }
         );
         return;
       }
 
       // Step 2: Extract media metadata & enforce constraints
-      const mediaResult = await getTikTokVideo(validation.resolvedUrl);
+      const mediaResult = await fetchUniversalMedia(validation.resolvedUrl);
 
       if (!mediaResult.success) {
-        if (mediaResult.error.includes('duration')) {
+        if (mediaResult.isPrivate) {
+          botStats.rejectedPrivate++;
+          logActivity('REJECT_PRIVATE', { url: targetUrl, platform: mediaResult.platform });
+        } else if (mediaResult.error?.includes('duration')) {
           botStats.rejectedDuration++;
           logActivity('REJECT_DURATION', { url: targetUrl });
-        } else if (mediaResult.error.includes('size')) {
+        } else if (mediaResult.error?.includes('size')) {
           botStats.rejectedSize++;
           logActivity('REJECT_SIZE', { url: targetUrl });
         } else {
@@ -192,7 +206,7 @@ export function createBot() {
         await ctx.api.editMessageText(
           ctx.chat.id,
           statusMsg.message_id,
-          mediaResult.error,
+          mediaResult.error || '❌ Cannot download media.',
           { parse_mode: 'Markdown' }
         );
         return;
@@ -231,24 +245,33 @@ export function createBot() {
         botStats.successfulDownloads++;
         logActivity('DOWNLOAD_SUCCESS', {
           title: (photoData.title || 'Photos').slice(0, 50),
+          platform: mediaResult.platform,
           type: 'photo',
           count: downloadedPhotoPaths.length
         });
         return;
       }
 
-      // VIDEO POST HANDLER
+      // VIDEO POST / REEL HANDLER
       const videoData = mediaResult.data;
+      let finalSizeBytes = 0;
 
-      // Download video file to local/project folder
-      const downloadResult = await downloadVideoToLocal(videoData.videoUrl, videoData.id);
-      downloadedFilePath = downloadResult.filePath;
-      const finalSizeBytes = downloadResult.sizeBytes;
+      // Handle video already downloaded directly to disk vs direct stream URL
+      if (videoData.filePath) {
+        downloadedFilePath = videoData.filePath;
+        finalSizeBytes = videoData.sizeBytes || 0;
+      } else if (videoData.videoUrl) {
+        const downloadResult = await downloadVideoToLocal(videoData.videoUrl, videoData.id);
+        downloadedFilePath = downloadResult.filePath;
+        finalSizeBytes = downloadResult.sizeBytes;
+      } else {
+        throw new Error('No downloadable video file or stream URL found.');
+      }
 
       // Update transfer statistics
       botStats.totalBytesTransferred += finalSizeBytes;
 
-      // Dispatch video directly to Telegram client (no caption text)
+      // Dispatch video directly to Telegram client (strictly no caption text per user instructions)
       await ctx.replyWithVideo(new InputFile(downloadedFilePath), {
         duration: videoData.duration || undefined,
         supports_streaming: true,
@@ -260,14 +283,15 @@ export function createBot() {
 
       botStats.successfulDownloads++;
       logActivity('DOWNLOAD_SUCCESS', {
-        title: videoData.title.slice(0, 50),
-        duration: videoData.durationFormatted,
+        title: (videoData.title || 'Video').slice(0, 50),
+        platform: mediaResult.platform,
+        duration: videoData.durationFormatted || `${videoData.duration || 0}s`,
         size: formatBytes(finalSizeBytes)
       });
     } catch (err) {
       botStats.failedDownloads++;
       logActivity('ERROR', { error: err.message, url: targetUrl });
-      console.error('Error handling TikTok download:', err);
+      console.error('Error handling media download:', err);
 
       await ctx.api.editMessageText(
         ctx.chat.id,

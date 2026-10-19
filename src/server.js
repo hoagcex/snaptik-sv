@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { botStats } from './bot.js';
-import { validateTikTokVideoUrl } from './validator.js';
-import { getTikTokVideo, formatBytes, formatDuration } from './tiktokService.js';
+import { validateMediaUrl } from './validator.js';
+import { fetchUniversalMedia } from './mediaService.js';
+import { formatBytes, formatDuration } from './tiktokService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,7 +80,7 @@ export function createServer(bot) {
     }
 
     try {
-      const validation = validateTikTokVideoUrl(url);
+      const validation = validateMediaUrl(url);
       if (!validation.isValidMedia) {
         return res.json({
           valid: false,
@@ -88,10 +89,11 @@ export function createServer(bot) {
         });
       }
 
-      const mediaResult = await getTikTokVideo(validation.resolvedUrl);
+      const mediaResult = await fetchUniversalMedia(validation.resolvedUrl);
       if (!mediaResult.success) {
         return res.json({
           valid: false,
+          isPrivate: mediaResult.isPrivate || false,
           error: mediaResult.error,
           resolvedUrl: validation.resolvedUrl
         });
@@ -99,6 +101,7 @@ export function createServer(bot) {
 
       return res.json({
         valid: true,
+        platform: mediaResult.platform,
         mediaType: mediaResult.mediaType,
         data: mediaResult.data,
         resolvedUrl: validation.resolvedUrl

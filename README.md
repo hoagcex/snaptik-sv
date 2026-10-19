@@ -1,25 +1,25 @@
-# SnapTik TikTok Telegram Downloader Bot 🤖
+# SnapTik & Reels Telegram Downloader Bot 🤖
 
-A high-performance TikTok video downloader Telegram bot built with **Node.js > 24**, **GrammY**, and **Express**.
+A high-performance media downloader Telegram bot built with **Node.js > 24**, **GrammY**, and **Express** supporting **TikTok**, **Instagram Reels**, and **Facebook Reels**.
 
 ---
 
 ## 🌟 Key Features
 
-* **Videos & Photo Slideshows Supported:**
-  * ✅ **Watermark-Free Videos:** Fast, crystal-clear downloads (duration < 2 minutes, file size < 50MB).
-  * ✅ **Full Photo Slideshows & Carousels:** Downloads all high-resolution images in a post and delivers them as an album!
-  * ❌ Rejects **TikTok Shop products** (`shop.tiktok.com` or `/product/...`)
-  * ❌ Rejects **TikTok Live streams** (`/@username/live`), profiles, and music-only links
-  * ✅ Supports both direct links and shortlinks (`vt.tiktok.com`, `vm.tiktok.com`, `tiktok.com/t/...`)
-* **Duration Limit Enforcement:** Strictly enforces **video duration < 2 minutes (120 seconds)**. Videos exceeding this duration are immediately rejected with clear user feedback.
-* **File Size Limit Enforcement:** Automatically rejects files exceeding **50 MB** (Telegram Bot API upload limit). Real-time stream size monitoring ensures oversized downloads are aborted immediately.
+* **Multi-Platform Support:**
+  * ✅ **TikTok Videos & Photos:** Watermark-free videos and complete photo slideshow carousels.
+  * ✅ **Instagram Reels & Videos:** Fast public Instagram Reel and post video downloads.
+  * ✅ **Facebook Reels & Videos:** Public Facebook Reels and videos via direct extraction and fallback engine.
+  * 🔒 **Private / Non-Public Reel Protection:** If a Reel is private, restricted, or cannot be seen, the bot displays a clear message stating it cannot download non-public media.
+  * ❌ Rejects **TikTok Shop products**, **Live streams**, **Stories**, profiles, and audio-only links.
+* **Duration Limit Enforcement:** Strictly enforces **video duration < 2 minutes (120 seconds)**. Media exceeding this duration are automatically rejected.
+* **File Size Limit Enforcement:** Automatically rejects files exceeding **50 MB** (Telegram Bot API upload limit).
 * **Ephemeral Local Storage & Guaranteed Cleanup:**
-  1. Downloads video directly into the project's `./downloads/` folder.
-  2. Sends the video to the client via Telegram (`InputFile`).
-  3. **Immediately deletes the stored video from disk** in a guaranteed `finally` block.
+  1. Downloads media directly into the project's `./downloads/` folder.
+  2. Sends the video or photo album to the client via Telegram without return text or captions.
+  3. **Immediately deletes the stored media from disk** in a guaranteed `finally` block.
   4. Automatically sweeps any orphan files on startup and every 20 minutes.
-* **Interactive Express Web Dashboard:** Runs an embedded Express web monitor at `http://localhost:3000` with live statistics, health checks (`/health`), and a built-in interactive URL validator tool.
+* **Interactive Express Web Dashboard:** Runs an embedded Express web monitor at `http://localhost:3000` with live statistics, health checks (`/health`), and a built-in interactive URL validator tool supporting TikTok, Instagram, and Facebook links.
 
 ---
 
@@ -108,16 +108,18 @@ When running, the Express server provides:
 snaptik/
 ├── src/
 │   ├── config.js          # Environment variables & limit configurations
-│   ├── validator.js       # URL extraction, redirect resolution & video validation
+│   ├── validator.js       # URL extraction & multi-platform link validation
+│   ├── mediaService.js    # Universal router for TikTok, Instagram Reels, & FB Reels
 │   ├── tiktokService.js   # Multi-provider TikTok downloader (TikWM + TobyG74 fallback)
 │   ├── fileManager.js     # Local download, stream size guard, and instant cleanup
-│   ├── bot.js             # Grammy Telegram bot handlers & user progress messages
+│   ├── bot.js             # Grammy Telegram bot handlers (clean dispatch without return text)
 │   └── server.js          # Express app: dashboard, health check, status API & webhook
 ├── public/                # Web Dashboard assets
 │   ├── index.html         # Live dashboard & interactive link tester UI
 │   └── style.css          # Modern dark-theme glassmorphic styling
 ├── test/                  # Unit and integration test suite
 │   ├── validator.test.js
+│   ├── mediaService.test.js
 │   ├── tiktokService.test.js
 │   └── fileManager.test.js
 ├── downloads/             # Ephemeral local storage (auto-cleaned)

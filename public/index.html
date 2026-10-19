@@ -16,8 +16,8 @@
       <div class="logo-group">
         <div class="logo-badge">⚡</div>
         <div class="logo-text">
-          <h1>SnapTik Downloader</h1>
-          <p>Telegram Bot Server & Control Dashboard</p>
+          <h1>SnapTik &amp; Reels Downloader</h1>
+          <p>Telegram Bot Server &bull; TikTok, Instagram Reels &amp; Facebook Reels</p>
         </div>
       </div>
       <div id="statusPill" class="status-pill">
@@ -33,20 +33,20 @@
         <div id="statTotal" class="metric-value cyan">0</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Downloaded & Sent</div>
+        <div class="metric-label">Downloaded &amp; Sent</div>
         <div id="statSuccess" class="metric-value green">0</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Rejected (> 2 Mins)</div>
+        <div class="metric-label">Rejected (&gt; 2 Mins)</div>
         <div id="statRejectDuration" class="metric-value amber">0</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Rejected (> 50 MB)</div>
+        <div class="metric-label">Rejected (&gt; 50 MB)</div>
         <div id="statRejectSize" class="metric-value pink">0</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Rejected (Non-Video)</div>
-        <div id="statRejectNonVideo" class="metric-value red">0</div>
+        <div class="metric-label">Rejected (Private/Non-Public)</div>
+        <div id="statRejectPrivate" class="metric-value red">0</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Data Transferred</div>
@@ -60,32 +60,38 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span>🛡️</span> Bot Constraints & Storage Rules
+            <span>🛡️</span> Bot Constraints &amp; Storage Rules
           </div>
         </div>
         <ul class="rule-list">
           <li class="rule-item">
             <span class="rule-badge badge-enforced">&lt; 2 MINS</span>
             <div>
-              <strong>Max Video Duration:</strong> Videos longer than 2 minutes (120 seconds) are automatically rejected to preserve bandwidth.
+              <strong>Max Video Duration:</strong> Videos and Reels longer than 2 minutes (120 seconds) are automatically rejected.
             </div>
           </li>
           <li class="rule-item">
             <span class="rule-badge badge-enforced">50 MB</span>
             <div>
-              <strong>Max File Size Limit:</strong> Video downloads are aborted and rejected if they exceed 50 MB (Telegram Bot API limit).
+              <strong>Max File Size Limit:</strong> Media downloads are aborted if they exceed 50 MB (Telegram Bot API limit).
             </div>
           </li>
           <li class="rule-item">
-            <span class="rule-badge badge-auto">VIDEOS & PHOTOS</span>
+            <span class="rule-badge badge-auto">MULTI-PLATFORM</span>
             <div>
-              <strong>Videos & Photo Slideshows:</strong> Downloads watermark-free videos (&lt; 2 mins) and all images in photo slideshows. Shop products and live streams are rejected.
+              <strong>TikTok, Instagram &amp; Facebook:</strong> Downloads TikTok videos &amp; photo slideshows, Instagram Reels &amp; posts, and Facebook Reels.
+            </div>
+          </li>
+          <li class="rule-item">
+            <span class="rule-badge badge-enforced">PUBLIC ONLY</span>
+            <div>
+              <strong>Private Reel Guard:</strong> If a Reel is private, restricted, or cannot be seen, the bot displays a clear message stating it cannot download non-public media.
             </div>
           </li>
           <li class="rule-item">
             <span class="rule-badge badge-auto">EPHEMERAL</span>
             <div>
-              <strong>Auto-Cleanup Storage:</strong> Videos are temporarily written to the project's <code>./downloads</code> folder, dispatched to Telegram, and immediately deleted.
+              <strong>Auto-Cleanup Storage:</strong> Videos are temporarily written to the project's <code>./downloads</code> folder, dispatched to Telegram without captions, and immediately deleted.
             </div>
           </li>
         </ul>
@@ -95,18 +101,18 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span>🔍</span> Interactive TikTok URL Tester
+            <span>🔍</span> Interactive Universal URL Tester
           </div>
         </div>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Test any TikTok link to verify how the bot validates video links, photo slideshows, and shop products:
+          Test any TikTok, Instagram Reel, or Facebook Reel link to verify validation and privacy detection:
         </p>
         <div class="tester-box">
           <input
             type="text"
             id="testUrlInput"
             class="input-url"
-            placeholder="https://www.tiktok.com/@user/video/... or https://vt.tiktok.com/..."
+            placeholder="TikTok, Instagram Reel, or Facebook Reel link..."
             value="https://www.tiktok.com/@tobz2k19/video/7451777267107187986"
           >
           <button id="btnTest" class="btn-primary" onclick="testUrl()">
@@ -150,10 +156,10 @@
             2. Send <code>/start</code> to initialize the bot.
           </p>
           <p>
-            3. Paste any TikTok video URL. The bot will validate the link, download it locally to <code>./downloads</code>, send the MP4 back to you, and clean up the file immediately.
+            3. Paste any <strong>TikTok</strong>, <strong>Instagram Reel</strong>, or <strong>Facebook Reel</strong> URL.
           </p>
-          <p style="font-size: 0.8rem; color: var(--accent-cyan);">
-            💡 Try testing with photo posts or products to see the validation in action!
+          <p>
+            4. The bot downloads the media, sends it cleanly with no return text, and deletes the local file immediately. If private or restricted, it lets you know it cannot be downloaded.
           </p>
         </div>
       </div>
@@ -188,7 +194,7 @@
         document.getElementById('statSuccess').textContent = data.stats.successfulDownloads;
         document.getElementById('statRejectDuration').textContent = data.stats.rejectedDuration;
         document.getElementById('statRejectSize').textContent = data.stats.rejectedSize;
-        document.getElementById('statRejectNonVideo').textContent = data.stats.rejectedNonVideo;
+        document.getElementById('statRejectPrivate').textContent = data.stats.rejectedPrivate || 0;
         document.getElementById('statTransferred').textContent = data.stats.totalTransferredFormatted;
         document.getElementById('uptimeDisplay').textContent = `Uptime: ${data.stats.uptimeSeconds}s`;
 
@@ -204,7 +210,7 @@
 
             const time = new Date(act.timestamp).toLocaleTimeString();
             let details = act.type;
-            if (act.info?.title) details = `${act.info.title} (${act.info.duration})`;
+            if (act.info?.title) details = `${act.info.title} (${act.info.duration || ''})`;
             else if (act.info?.reason) details = act.info.reason;
             else if (act.info?.error) details = act.info.error;
 
@@ -233,7 +239,7 @@
       btn.innerHTML = '<span>Verifying...</span>';
       resultBox.style.display = 'block';
       resultBox.className = 'test-result';
-      resultBox.innerHTML = '<em>Analyzing link and verifying video streams...</em>';
+      resultBox.innerHTML = '<em>Analyzing link and verifying media accessibility...</em>';
 
       try {
         const res = await fetch('/api/validate', {
@@ -249,25 +255,42 @@
             resultBox.innerHTML = `
               <strong>✅ Valid TikTok Photo Slideshow!</strong><br>
               <strong>Title:</strong> ${data.data.title || 'Untitled'}<br>
-              <strong>Creator:</strong> ${data.data.author.name} (@${data.data.author.username})<br>
-              <strong>Photos Found:</strong> <span style="color: var(--accent-green); font-weight: bold;">${data.data.imageCount} images</span><br>
+              <strong>Creator:</strong> ${data.data.author?.name || 'User'} (@${data.data.author?.username || 'user'})<br>
+              <strong>Photos Found:</strong> <span style="color: var(--accent-green); font-weight: bold;">${data.data.imageCount || data.data.images?.length || 0} images</span><br>
               <strong>Status:</strong> Ready to download all photos and dispatch as album!
+            `;
+          } else if (data.platform === 'instagram') {
+            resultBox.innerHTML = `
+              <strong>✅ Valid Public Instagram Reel!</strong><br>
+              <strong>Title:</strong> ${data.data.title || 'Instagram Reel'}<br>
+              <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.duration}s</span> (Limit: &lt; 2m)<br>
+              <strong>Status:</strong> Public and ready for instant dispatch!
+            `;
+          } else if (data.platform === 'facebook') {
+            resultBox.innerHTML = `
+              <strong>✅ Valid Public Facebook Reel!</strong><br>
+              <strong>Title:</strong> ${data.data.title || 'Facebook Reel'}<br>
+              <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.duration || 0}s</span> (Limit: &lt; 2m)<br>
+              <strong>Status:</strong> Public and ready for instant dispatch!
             `;
           } else {
             resultBox.innerHTML = `
               <strong>✅ Valid TikTok Video!</strong><br>
               <strong>Title:</strong> ${data.data.title || 'Untitled'}<br>
-              <strong>Creator:</strong> ${data.data.author.name} (@${data.data.author.username})<br>
-              <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.durationFormatted}</span> (Limit: &lt; 2m)<br>
-              <strong>Size:</strong> <span style="color: var(--accent-green);">${data.data.sizeFormatted}</span> (Limit: 50MB)<br>
+              <strong>Creator:</strong> ${data.data.author?.name || 'User'} (@${data.data.author?.username || 'user'})<br>
+              <strong>Duration:</strong> <span style="color: var(--accent-green);">${data.data.durationFormatted || data.data.duration + 's'}</span> (Limit: &lt; 2m)<br>
+              <strong>Size:</strong> <span style="color: var(--accent-green);">${data.data.sizeFormatted || 'Under limit'}</span> (Limit: 50MB)<br>
               <strong>Status:</strong> Ready for download & instant dispatch!
             `;
           }
         } else {
           resultBox.className = 'test-result error';
+          const errMsg = data.error || (data.isPrivate
+            ? '🔒 Cannot download: This Reel is not public, restricted, or cannot be seen.'
+            : 'The submitted link could not be downloaded.');
           resultBox.innerHTML = `
-            <strong>❌ Link Rejected:</strong><br>
-            ${(data.error || 'The submitted link is not an allowed TikTok video.').replace(/\\n/g, '<br>')}
+            <strong>❌ Cannot Download:</strong><br>
+            ${errMsg.replace(/\n/g, '<br>')}
           `;
         }
       } catch (err) {
