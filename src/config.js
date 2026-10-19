@@ -31,6 +31,23 @@ export const config = {
   // Is webhook mode enabled
   get isWebhookMode() {
     return Boolean(this.webhookUrl && this.webhookUrl.trim() !== '');
+  },
+
+  // Optional: Custom Telegram Bot API server root (e.g. http://localhost:8081 for self-hosted server allowing up to 2GB)
+  telegramApiRoot: process.env.TELEGRAM_API_ROOT || '',
+
+  // Is self-hosted local Bot API server enabled
+  get isLocalBotApi() {
+    return Boolean(this.telegramApiRoot && this.telegramApiRoot.trim() !== '');
+  },
+
+  // Effective Telegram upload limit in MB (50MB on official Telegram cloud, or up to 2000MB on local Bot API server)
+  get telegramUploadLimitMB() {
+    return this.isLocalBotApi ? this.maxFileSizeMB : Math.min(this.maxFileSizeMB, 50);
+  },
+
+  get telegramUploadLimitBytes() {
+    return this.telegramUploadLimitMB * 1024 * 1024;
   }
 };
 

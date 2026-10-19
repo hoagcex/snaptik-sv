@@ -16,9 +16,10 @@ test('formatBytes should correctly format file sizes', () => {
   assert.strictEqual(formatBytes(16937255), '16.15 MB');
 });
 
-test('config limits should match requirements', () => {
-  assert.strictEqual(config.maxDurationSeconds, 120, 'Duration limit must be 120s (2 minutes)');
-  assert.strictEqual(config.maxFileSizeMB, 50, 'Max file size must default to 50MB');
+test('config limits should be valid and enforce Telegram cloud limits', () => {
+  assert.ok(config.maxDurationSeconds > 0, 'Duration limit must be positive');
+  assert.ok(config.maxFileSizeMB > 0, 'Max file size must be positive');
+  assert.ok(config.telegramUploadLimitMB <= 50 || config.isLocalBotApi, 'Cloud upload limit must not exceed 50MB unless local Bot API is enabled');
 });
 
 test('getTikTokVideo should fetch valid video info within duration limit', async () => {

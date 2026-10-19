@@ -48,7 +48,14 @@ export function createBot() {
     return null;
   }
 
-  const bot = new Bot(config.botToken);
+  const botOptions = {};
+  if (config.telegramApiRoot) {
+    botOptions.client = {
+      apiRoot: config.telegramApiRoot
+    };
+  }
+
+  const bot = new Bot(config.botToken, botOptions);
 
   // Command: /start
   bot.command('start', async (ctx) => {
@@ -271,6 +278,25 @@ export function createBot() {
         throw new Error('No downloadable video file or stream URL found.');
       }
 
+      // Enforce Telegram Bot API upload limit (50MB on official cloud server)
+      if (finalSizeBytes > config.telegramUploadLimitBytes) {
+        botStats.rejectedSize++;
+        logActivity('REJECT_SIZE', { url: targetUrl, size: finalSizeBytes });
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          `⚠️ **Video exceeds Telegram's ${config.telegramUploadLimitMB} MB upload limit!**\n\n` +
+          `📦 Video size: **${formatBytes(finalSizeBytes)}**\n` +
+          `⛔ Telegram limit: **${config.telegramUploadLimitMB} MB**\n\n` +
+          `Telegram's official cloud servers reject any bot file upload larger than **50 MB** (\`413 Request Entity Too Large\`).` +
+          (!config.isLocalBotApi && config.maxFileSizeMB > 50
+            ? `\n\n💡 *Note:* Even though \`MAX_FILE_SIZE_MB=${config.maxFileSizeMB}\` is set in \`.env\`, Telegram's official cloud servers will not accept uploads over 50 MB unless connected to a self-hosted Telegram Bot API server.`
+            : ''),
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+
       // Update transfer statistics
       botStats.totalBytesTransferred += finalSizeBytes;
 
@@ -296,10 +322,19 @@ export function createBot() {
       logActivity('ERROR', { error: err.message, url: targetUrl });
       console.error('Error handling media download:', err);
 
+      let errorMessage = `❌ **Download Failed**\n\n${escapeMarkdown(err.message || 'An unexpected error occurred while downloading.')}`;
+      if (err.error_code === 413 || err.description?.includes('Request Entity Too Large') || err.message?.includes('413')) {
+        errorMessage = `⚠️ **File size exceeds Telegram's limit!**\n\n` +
+          `📦 Video size: **${formatBytes(finalSizeBytes || 0)}**\n` +
+          `⛔ Telegram Cloud Limit: **50 MB**\n\n` +
+          `Telegram's official Bot API server strictly rejected this upload with error \`413 Request Entity Too Large\`.\n` +
+          `Telegram restricts all bot file uploads on its cloud servers to a maximum of **50 MB**.`;
+      }
+
       await ctx.api.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
-        `❌ **Download Failed**\n\n${escapeMarkdown(err.message || 'An unexpected error occurred while downloading.')}`,
+        errorMessage,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     } finally {
