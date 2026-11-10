@@ -249,13 +249,13 @@ export async function getTikTokVideo(tiktokUrl) {
     }
   }
 
-  // --- Validate Duration Limit (< 2 mins / config.maxDurationSeconds) ---
+  // --- Validate Duration Limit (< config.maxDurationSeconds) ---
   if (videoData.duration > 0 && videoData.duration > config.maxDurationSeconds) {
     return {
       success: false,
       error: `⚠️ **Video duration exceeds limit!**\n\n` +
              `⏱️ Video length: **${formatDuration(videoData.duration)}**\n` +
-             `⛔ Allowed limit: **< ${formatDuration(config.maxDurationSeconds)}** (2 minutes)\n\n` +
+             `⛔ Allowed limit: **< ${formatDuration(config.maxDurationSeconds)}**\n\n` +
              `Please submit a shorter TikTok video.`
     };
   }

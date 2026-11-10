@@ -6,6 +6,73 @@ import { config } from './config.js';
 import { formatBytes } from './tiktokService.js';
 
 /**
+ * Builds default headers (User-Agent, Referer) for a CDN URL.
+ */
+export function buildFetchHeaders(url, customHeaders = {}) {
+  let defaultReferer = 'https://www.tiktok.com/';
+  if (url.includes('twimg.com') || url.includes('twitter.com') || url.includes('x.com')) {
+    defaultReferer = 'https://x.com/';
+  } else if (url.includes('fbcdn.net') || url.includes('facebook.com')) {
+    defaultReferer = 'https://www.facebook.com/';
+  } else if (url.includes('cdninstagram.com') || url.includes('instagram.com')) {
+    defaultReferer = 'https://www.instagram.com/';
+  }
+
+  return {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    'Referer': defaultReferer,
+    ...customHeaders
+  };
+}
+
+/**
+ * Opens a direct readable stream for a remote media URL without writing to disk.
+ * Enforces real-time byte size limits as chunks pass through.
+ *
+ * @param {string} mediaUrl Direct CDN URL
+ * @param {number} [maxBytes] Maximum allowed bytes (defaults to config.telegramUploadLimitBytes)
+ * @param {object} [customHeaders]
+ * @returns {Promise<{ stream: AsyncGenerator<Uint8Array>, contentLength: number, getTransferredBytes: () => number }>}
+ */
+export async function createDirectMediaStream(mediaUrl, maxBytes = config.telegramUploadLimitBytes, customHeaders = {}) {
+  const response = await fetch(mediaUrl, {
+    headers: buildFetchHeaders(mediaUrl, customHeaders),
+    signal: AbortSignal.timeout(300000) // 5 min timeout for large/long videos
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to open media stream: HTTP ${response.status}`);
+  }
+
+  const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+  if (contentLength > 0 && contentLength > maxBytes) {
+    await response.body.cancel().catch(() => {});
+    throw new Error(
+      `⚠️ Video file size (${formatBytes(contentLength)}) exceeds the maximum allowed limit of ${formatBytes(maxBytes)}.`
+    );
+  }
+
+  let transferred = 0;
+  async function* streamGenerator() {
+    for await (const chunk of response.body) {
+      transferred += chunk.byteLength;
+      if (transferred > maxBytes) {
+        throw new Error(
+          `⚠️ Video stream exceeded the maximum allowed limit of ${formatBytes(maxBytes)}.`
+        );
+      }
+      yield chunk;
+    }
+  }
+
+  return {
+    stream: streamGenerator(),
+    contentLength,
+    getTransferredBytes: () => transferred
+  };
+}
+
+/**
  * Downloads a video from a direct URL and saves it to the local project downloads directory.
  * Includes real-time size limit enforcement during streaming.
  *
@@ -20,25 +87,12 @@ export async function downloadVideoToLocal(videoUrl, videoId = 'video', customHe
   const filePath = path.join(config.downloadsDir, fileName);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000); // 60s download timeout
-
-  let defaultReferer = 'https://www.tiktok.com/';
-  if (videoUrl.includes('twimg.com') || videoUrl.includes('twitter.com') || videoUrl.includes('x.com')) {
-    defaultReferer = 'https://x.com/';
-  } else if (videoUrl.includes('fbcdn.net') || videoUrl.includes('facebook.com')) {
-    defaultReferer = 'https://www.facebook.com/';
-  } else if (videoUrl.includes('cdninstagram.com') || videoUrl.includes('instagram.com')) {
-    defaultReferer = 'https://www.instagram.com/';
-  }
+  const timeout = setTimeout(() => controller.abort(), 300000); // 5m download timeout for large files
 
   try {
     const response = await fetch(videoUrl, {
       signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Referer': defaultReferer,
-        ...customHeaders
-      }
+      headers: buildFetchHeaders(videoUrl, customHeaders)
     });
 
     clearTimeout(timeout);

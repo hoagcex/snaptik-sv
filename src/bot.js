@@ -2,8 +2,8 @@ import { Bot, InputFile } from 'grammy';
 import { config } from './config.js';
 import { extractMediaUrls, validateMediaUrl, detectPlatform } from './validator.js';
 import { formatBytes, formatDuration } from './tiktokService.js';
-import { fetchUniversalMedia } from './mediaService.js';
-import { downloadVideoToLocal, downloadPhotosToLocal, deleteLocalFile, deleteLocalFiles } from './fileManager.js';
+import { fetchUniversalMedia, splitLargeVideoForTelegram } from './mediaService.js';
+import { createDirectMediaStream, downloadVideoToLocal, downloadPhotosToLocal, deleteLocalFile, deleteLocalFiles } from './fileManager.js';
 
 // Live statistics for Express dashboard
 export const botStats = {
@@ -70,10 +70,11 @@ export function createBot() {
       `• 🐦 *X (Twitter) Video*`,
       '',
       `⚡ *Download Rules & Limits:*`,
-      `• ⏱️ *Max Duration:* Under 2 minutes (< 120s)`,
-      `• 📦 *Max File Size:* ${config.maxFileSizeMB} MB`,
+      `• ⏱️ *Max Duration:* < ${formatDuration(config.maxDurationSeconds)} (${config.maxDurationSeconds}s)`,
+      `• 📦 *Max File Size:* ${config.maxFileSizeMB} MB (large videos > 50 MB are auto-split into parts)`,
+      `• 🚀 *Direct Stream:* Videos under 50 MB stream straight to Telegram with zero disk wait`,
       `• 🔒 *Public Media Only:* Private, friends-only, or restricted posts cannot be downloaded.`,
-      `• 🧹 *Auto-Cleanup:* Videos are saved to the server temporarily, sent to you, and deleted immediately!`,
+      `• 🧹 *Auto-Cleanup:* Temporary files (if any) are deleted immediately!`,
       '',
       `Just paste a link below to try it out! 👇`
     ].join('\n');
@@ -101,7 +102,7 @@ export function createBot() {
       `❌ Non-public or restricted posts (cannot be seen)`,
       `❌ TikTok Shop products or Live streams`,
       `❌ Instagram or Facebook Stories`,
-      `❌ Videos longer than 2 minutes (${config.maxDurationSeconds}s)`,
+      `❌ Videos longer than ${formatDuration(config.maxDurationSeconds)} (${config.maxDurationSeconds}s)`,
       `❌ Videos larger than ${config.maxFileSizeMB} MB`,
       '',
       `*Commands:*`,
@@ -118,9 +119,9 @@ export function createBot() {
     const limits = [
       `⚙️ *Bot Constraints & Limits:*`,
       '',
-      `• ⏱️ *Max Video Duration:* 2 minutes (120 seconds)`,
+      `• ⏱️ *Max Video Duration:* ${formatDuration(config.maxDurationSeconds)} (${config.maxDurationSeconds} seconds)`,
       `• 📦 *Max File Size:* ${config.maxFileSizeMB} MB`,
-      `• 📁 *Storage Policy:* Ephemeral local storage (auto-deleted instantly after dispatch)`,
+      `• 🚀 *Delivery Mode:* Direct memory stream (< 50 MB) or lossless auto-split (> 50 MB)`,
       `• 🔒 *Privacy Policy:* Only public videos and Reels are downloadable`,
       `• 🛡️ *Validation:* Pre-filtering for profiles, stories, products, and private media`
     ].join('\n');
@@ -227,24 +228,49 @@ export function createBot() {
         ctx.replyWithChatAction('upload_photo').catch(() => {});
         const photoData = mediaResult.data;
 
-        // Download all photos to local project folder
-        downloadedPhotoPaths = await downloadPhotosToLocal(photoData.images, photoData.id);
-
-        if (downloadedPhotoPaths.length === 1) {
-          await ctx.replyWithPhoto(new InputFile(downloadedPhotoPaths[0]), {
-            reply_parameters: { message_id: ctx.message.message_id }
-          });
-        } else {
-          // Telegram sendMediaGroup accepts 2 to 10 items per group
-          for (let i = 0; i < downloadedPhotoPaths.length; i += 10) {
-            const batch = downloadedPhotoPaths.slice(i, i + 10);
-            if (batch.length === 1) {
-              await ctx.replyWithPhoto(new InputFile(batch[0]));
-            } else {
-              const group = batch.map(fp => ({ type: 'photo', media: new InputFile(fp) }));
-              await ctx.replyWithMediaGroup(group, i === 0 ? {
-                reply_parameters: { message_id: ctx.message.message_id }
-              } : undefined);
+        try {
+          // Fast path: stream photos directly from CDN to Telegram without disk write
+          if (photoData.images.length === 1) {
+            const { stream } = await createDirectMediaStream(photoData.images[0]);
+            await ctx.replyWithPhoto(new InputFile(stream, `photo_${photoData.id}.jpg`), {
+              reply_parameters: { message_id: ctx.message.message_id }
+            });
+          } else {
+            for (let i = 0; i < photoData.images.length; i += 10) {
+              const batch = photoData.images.slice(i, i + 10);
+              const streams = await Promise.all(
+                batch.map((imgUrl, idx) =>
+                  createDirectMediaStream(imgUrl).then(({ stream }) => new InputFile(stream, `photo_${photoData.id}_${i + idx + 1}.jpg`))
+                )
+              );
+              if (streams.length === 1) {
+                await ctx.replyWithPhoto(streams[0]);
+              } else {
+                const group = streams.map(media => ({ type: 'photo', media }));
+                await ctx.replyWithMediaGroup(group, i === 0 ? {
+                  reply_parameters: { message_id: ctx.message.message_id }
+                } : undefined);
+              }
+            }
+          }
+        } catch {
+          // Fallback: download all photos to local project folder
+          downloadedPhotoPaths = await downloadPhotosToLocal(photoData.images, photoData.id);
+          if (downloadedPhotoPaths.length === 1) {
+            await ctx.replyWithPhoto(new InputFile(downloadedPhotoPaths[0]), {
+              reply_parameters: { message_id: ctx.message.message_id }
+            });
+          } else {
+            for (let i = 0; i < downloadedPhotoPaths.length; i += 10) {
+              const batch = downloadedPhotoPaths.slice(i, i + 10);
+              if (batch.length === 1) {
+                await ctx.replyWithPhoto(new InputFile(batch[0]));
+              } else {
+                const group = batch.map(fp => ({ type: 'photo', media: new InputFile(fp) }));
+                await ctx.replyWithMediaGroup(group, i === 0 ? {
+                  reply_parameters: { message_id: ctx.message.message_id }
+                } : undefined);
+              }
             }
           }
         }
@@ -257,55 +283,110 @@ export function createBot() {
           title: (photoData.title || 'Photos').slice(0, 50),
           platform: mediaResult.platform,
           type: 'photo',
-          count: downloadedPhotoPaths.length
+          count: photoData.images.length
         });
         return;
       }
 
       // VIDEO POST / REEL HANDLER
       const videoData = mediaResult.data;
-      let finalSizeBytes = 0;
+      let finalSizeBytes = videoData.sizeBytes || 0;
+      let streamedDirectly = false;
 
-      // Handle video already downloaded directly to disk vs direct stream URL
-      if (videoData.filePath) {
+      // Fast path: Direct memory stream from CDN -> Telegram when videoUrl is available and within single-upload limit
+      if (videoData.videoUrl && !videoData.filePath && (finalSizeBytes === 0 || finalSizeBytes <= config.telegramUploadLimitBytes)) {
+        try {
+          const { stream, contentLength, getTransferredBytes } = await createDirectMediaStream(
+            videoData.videoUrl,
+            config.telegramUploadLimitBytes,
+            videoData.headers || {}
+          );
+
+          await ctx.replyWithVideo(new InputFile(stream, `video_${videoData.id || Date.now()}.mp4`), {
+            duration: videoData.duration || undefined,
+            supports_streaming: true,
+            reply_parameters: { message_id: ctx.message.message_id }
+          });
+
+          finalSizeBytes = getTransferredBytes() || contentLength || finalSizeBytes;
+          streamedDirectly = true;
+        } catch (streamErr) {
+          // If stream failed because file is > 50MB (but <= maxFileSizeBytes), fall back to disk + auto-split
+          const downloadResult = await downloadVideoToLocal(videoData.videoUrl, videoData.id, videoData.headers || {});
+          downloadedFilePath = downloadResult.filePath;
+          finalSizeBytes = downloadResult.sizeBytes;
+        }
+      } else if (videoData.filePath) {
         downloadedFilePath = videoData.filePath;
         finalSizeBytes = videoData.sizeBytes || 0;
       } else if (videoData.videoUrl) {
-        const downloadResult = await downloadVideoToLocal(videoData.videoUrl, videoData.id);
+        const downloadResult = await downloadVideoToLocal(videoData.videoUrl, videoData.id, videoData.headers || {});
         downloadedFilePath = downloadResult.filePath;
         finalSizeBytes = downloadResult.sizeBytes;
       } else {
         throw new Error('No downloadable video file or stream URL found.');
       }
 
-      // Enforce Telegram Bot API upload limit (50MB on official cloud server)
-      if (finalSizeBytes > config.telegramUploadLimitBytes) {
-        botStats.rejectedSize++;
-        logActivity('REJECT_SIZE', { url: targetUrl, size: finalSizeBytes });
-        await ctx.api.editMessageText(
-          ctx.chat.id,
-          statusMsg.message_id,
-          `⚠️ **Video exceeds Telegram's ${config.telegramUploadLimitMB} MB upload limit!**\n\n` +
-          `📦 Video size: **${formatBytes(finalSizeBytes)}**\n` +
-          `⛔ Telegram limit: **${config.telegramUploadLimitMB} MB**\n\n` +
-          `Telegram's official cloud servers reject any bot file upload larger than **50 MB** (\`413 Request Entity Too Large\`).` +
-          (!config.isLocalBotApi && config.maxFileSizeMB > 50
-            ? `\n\n💡 *Note:* Even though \`MAX_FILE_SIZE_MB=${config.maxFileSizeMB}\` is set in \`.env\`, Telegram's official cloud servers will not accept uploads over 50 MB unless connected to a self-hosted Telegram Bot API server.`
-            : ''),
-          { parse_mode: 'Markdown' }
-        );
-        return;
+      // If not already streamed directly, send from local disk (supporting large files > 50MB via stream-copy split)
+      if (!streamedDirectly && downloadedFilePath) {
+        if (finalSizeBytes > config.maxFileSizeBytes) {
+          botStats.rejectedSize++;
+          logActivity('REJECT_SIZE', { url: targetUrl, size: finalSizeBytes });
+          await ctx.api.editMessageText(
+            ctx.chat.id,
+            statusMsg.message_id,
+            `⚠️ **Video exceeds the ${config.maxFileSizeMB} MB limit!**\n\n` +
+            `📦 Video size: **${formatBytes(finalSizeBytes)}**\n` +
+            `⛔ Max allowed: **${config.maxFileSizeMB} MB**`,
+            { parse_mode: 'Markdown' }
+          );
+          return;
+        }
+
+        if (finalSizeBytes > config.telegramUploadLimitBytes) {
+          // Large file (> 50MB on cloud Bot API): split into lossless stream-copied parts via ffmpeg
+          await ctx.api.editMessageText(
+            ctx.chat.id,
+            statusMsg.message_id,
+            `📦 Large video (${formatBytes(finalSizeBytes)}) — splitting into parts for Telegram...`
+          ).catch(() => {});
+
+          const parts = await splitLargeVideoForTelegram(downloadedFilePath, finalSizeBytes, videoData.duration || 0);
+          for (const part of parts) {
+            if (part.filePath !== downloadedFilePath) {
+              downloadedPhotoPaths.push(part.filePath); // track for guaranteed cleanup in finally
+            }
+          }
+
+          if (parts.length === 1 && parts[0].sizeBytes > config.telegramUploadLimitBytes) {
+            botStats.rejectedSize++;
+            logActivity('REJECT_SIZE', { url: targetUrl, size: finalSizeBytes });
+            await ctx.api.editMessageText(
+              ctx.chat.id,
+              statusMsg.message_id,
+              `⚠️ **Video exceeds Telegram's ${config.telegramUploadLimitMB} MB single-file limit (${formatBytes(finalSizeBytes)}) and could not be split!**`,
+              { parse_mode: 'Markdown' }
+            );
+            return;
+          }
+
+          for (let i = 0; i < parts.length; i++) {
+            await ctx.replyWithVideo(new InputFile(parts[i].filePath), {
+              supports_streaming: true,
+              reply_parameters: i === 0 ? { message_id: ctx.message.message_id } : undefined
+            });
+          }
+        } else {
+          await ctx.replyWithVideo(new InputFile(downloadedFilePath), {
+            duration: videoData.duration || undefined,
+            supports_streaming: true,
+            reply_parameters: { message_id: ctx.message.message_id }
+          });
+        }
       }
 
       // Update transfer statistics
       botStats.totalBytesTransferred += finalSizeBytes;
-
-      // Dispatch video directly to Telegram client (strictly no caption text per user instructions)
-      await ctx.replyWithVideo(new InputFile(downloadedFilePath), {
-        duration: videoData.duration || undefined,
-        supports_streaming: true,
-        reply_parameters: { message_id: ctx.message.message_id }
-      });
 
       // Remove progress status message after delivery
       await ctx.api.deleteMessage(ctx.chat.id, statusMsg.message_id).catch(() => {});
